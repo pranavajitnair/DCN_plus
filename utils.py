@@ -4,6 +4,8 @@ import string
 from collections import Counter
 import spacy
 import pickle
+import argparse
+import os
 
 def read_data(filename):
         with open(filename) as f:
@@ -119,11 +121,6 @@ def find_answer(document,answer):
         else:
                 return -1
 
-def write_to_file(tokenized_data,file_name):
-        file=open(file_name,"wb")
-        pickle.dump(tokenized_data,file)
-        file.close()
-        
 def read_from_file(file_name):
         file=open(file_name,"rb")
         tokenized_data=pickle.load(file)
@@ -146,3 +143,39 @@ def get_answer(document,ans_start,ans_end,predict_start,predict_end):
                         predict_ans+=document[i].text
                         
         return ans,predict_ans
+    
+def setup():
+        parser=argparse.ArgumentParser('files parser')
+        
+        parser.add_argument('--train_file',type=str,default='/home/pranav/ml/data/SQuAD 1.1/train-v1.1.json',help=' path to train file')
+        parser.add_argument('--dev_file',type=str,'/home/pranav/ml/data/SQuAD 1.1/dev-v1.1.json',help='path to dev file')
+        parser.add_argument('--preprocessed_train',type=str,default=os.getcwd()+'/Preprocessed/train.pickle',help='path to file where preprocessed training data to be stored')
+        parser.add_argument('--preprocessed_dev',type=str,default=os.getcwd()+'/Preprocessed/dev.pickle',help='path to file where preprocessed development data to be stored')
+        
+        args=parser.parse_args()
+        
+        return args
+    
+def main():
+        train_path=args.train_file
+        dev_path=args.dev_file
+        train_store=args.preprocessed_train
+        dev_store=args.preprocessed_dev
+        
+        data_train=read_data(train_path)
+        data_train=get_data(data_train)
+        tokenized_data_train=tokenize(data_train)
+        
+        data_dev=read_data(dev_path)
+        data_dev=get_data(data_dev)
+        tokenized_data_dev=tokenize(data_dev)
+        
+        file_train=open(train_store,'wb')
+        pickle.dump(tokenized_data_train,file_train)
+        
+        file_dev=open(dev_store,'wb')
+        pickle.dump(file_dev,tokenized_data_dev,file_dev)
+        
+if __name__=='__main__':
+        args=setup()
+        main(args)
