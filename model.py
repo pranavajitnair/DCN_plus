@@ -114,6 +114,6 @@ class Model(nn.Module):
                 U=self.encoder(document_embeddings,question_embeddings)
                 start_logits,end_logits=self.decoder(U)
                 
-                loss=get_loss(start_logits,end_logits,answer,document,self.sigma_ce[0],self.sigma_rl[0])
+                loss,baseline,em=get_loss(start_logits,end_logits,answer,document,self.sigma_ce[0],self.sigma_rl[0])
                 
-                return loss
+                return loss,baseline,em
