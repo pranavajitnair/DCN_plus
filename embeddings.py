@@ -64,4 +64,4 @@ class DataLoader(object):
                 if self.counter==len(self.tokenized_data['contexts']):
                         self.counter=0
                         
-                return context_embeddings,question_embeddings,answer    
+                return context_embeddings,question_embeddings,answer,context 
