@@ -43,8 +43,8 @@ def loss_function_for_reinforcement(start_logits,end_logits,answer,document):
         final_start_logits=start_logits[:,-1,:].view(-1)
         final_end_logits=end_logits[:,-1,:].view(-1)
         
-        greedy_start=torch.argmax(final_start_logits)[0]
-        greedy_end=torch.argmax(final_end_logits)[0]
+        greedy_start=torch.argmax(final_start_logits)
+        greedy_end=torch.argmax(final_end_logits)
         
         sample_start=[]
         sample_end=[]
@@ -67,7 +67,7 @@ def loss_function_for_reinforcement(start_logits,end_logits,answer,document):
 
 def get_loss(start_logits,end_logits,answer,document,sigma_ce,sigma_rl):
         ce_loss=crossEntropyLoss(start_logits,end_logits,answer)
-        rl_loss,baseline,em=loss_function_for_reinforcement(start_logits,end_logits,document)
+        rl_loss,baseline,em=loss_function_for_reinforcement(start_logits,end_logits,answer,document)
         
         ce_loss/=(2*sigma_ce**2)
         rl_loss/=(2*sigma_rl**2)
