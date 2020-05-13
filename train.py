@@ -1,3 +1,4 @@
+import torch
 import torch.optim as optim
 
 import argparse
@@ -9,9 +10,9 @@ from embeddings import DataLoader
 
 def train(Model,dataloader_train,dataloader_dev,train_iters,dev_iters,epochs,optimizer):
         for epoch in range(epochs):
+                Model.train()
                 loss=0
                 optimizer.zero_grad()
-                Model.train()
                 
                 for _ in range(train_iters):
                         context_embeddings,question_embeddings,answer,document=dataloader_train.__get_next__()
@@ -22,21 +23,22 @@ def train(Model,dataloader_train,dataloader_dev,train_iters,dev_iters,epochs,opt
                 loss.backward()
                 optimizer.step()
                 
-                Model.eval()
-                loss_dev=0
-                baseline=0
-                em=0
-                
-                for _ in range(dev_iters):
-                        context_embeddings_dev,question_embeddings_dev,answer_dev,document_dev=dataloader_dev.__get_next__()
-                        loss_dev_temp,baseline_temp,em_temp=Model(context_embeddings_dev,question_embeddings_dev,answer_dev,document_dev)
-                        loss_dev+=loss_dev_temp
-                        baseline+=baseline_temp
-                        em+=em_temp
+                with torch.no_grad():
+                        Model.eval()
+                        loss_dev=0
+                        baseline=0
+                        em=0
                         
-                dev_loss=loss_dev.item()/dev_iters
-                baseline/=dev_iters
-                em/=dev_iters
+                        for _ in range(dev_iters):
+                                context_embeddings_dev,question_embeddings_dev,answer_dev,document_dev=dataloader_dev.__get_next__()
+                                loss_dev_temp,baseline_temp,em_temp=Model(context_embeddings_dev,question_embeddings_dev,answer_dev,document_dev)
+                                loss_dev+=loss_dev_temp
+                                baseline+=baseline_temp
+                                em+=em_temp
+                                
+                        dev_loss=loss_dev.item()/dev_iters
+                        baseline/=dev_iters
+                        em/=dev_iters
                 
                 print('epoch=',epoch,'training loss=',training_loss,'validation loss=',dev_loss,'validation F1 score=',baseline,'validation Exact Match score=',em)
                 
@@ -53,9 +55,7 @@ def main(args):
         train_iters=80000
         dev_iters=10000
         
-        optimizer=optim.Adam(lr=lr)
-        
-        train_file_path=args.tokensized_train_data_path
+        train_file_path=args.tokenized_train_data_path
         dev_file_path=args.tokenized_dev_data_path
         
         train_data_processed=read_from_file(train_file_path)
@@ -64,6 +64,8 @@ def main(args):
         model=Model(hidden_size,input_dim,pooling_size,k,max_decoder_steps)
         Dataloader_train=DataLoader(train_data_processed)
         Dataloader_dev=DataLoader(dev_data_processed)
+
+        optimizer=optim.Adam(model.parameters(),lr=lr)
         
         train(model,Dataloader_train,Dataloader_dev,train_iters,dev_iters,epochs,optimizer)
     
@@ -84,4 +86,4 @@ def setup():
     
 if __name__=='__main__':
         args=setup()
-        main(args)
+#        main(args)
