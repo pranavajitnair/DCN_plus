@@ -2,18 +2,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from maxout_and_experts import HMN,Experts
 from loss import get_loss
+from maxout_and_experts import HMN,Experts
+
 
 class Encoder(nn.Module):
         def __init__(self,dim,input_dim):
                 super(Encoder,self).__init__()
                 
-                self.lstm1=nn.LSTM(input_dim,dim,num_layers=1,bidirectional=True)
-                self.lstm2=nn.LSTM(dim*2,dim,num_layers=1,bidirectional=True)
-                self.ulstm=nn.LSTM(12*dim,dim,num_layers=1,bidirectional=True)
+                self.lstm1=nn.LSTM(input_dim,dim,num_layers=1,bidirectional=True,batch_first=True)
+                self.lstm2=nn.LSTM(dim*2,dim,num_layers=1,bidirectional=True,batch_first=True)
+                self.ulstm=nn.LSTM(12*dim,dim,num_layers=1,bidirectional=True,batch_first=True)
                 
-                self.sentinal=nn.Parameter(torch.randn(1,1,input_dim))
+                self.sentinal=nn.Parameter(torch.randn(1,1,2*dim))
+                self.sentinalq=nn.Parameter(torch.randn(1,1,2*dim))
                 self.q_encode=nn.Linear(2*dim,2*dim)
             
         def forward(self,document_embeddings,question_embeddings):
@@ -22,36 +24,38 @@ class Encoder(nn.Module):
                 EQ1=torch.tanh(self.q_encode(EQ1))
                 
                 ED1=torch.cat((self.sentinal,ED1),dim=-2)
-                EQ1=torch.cat((self.sentinal,EQ1),dim=-2)
+                EQ1=torch.cat((self.sentinalq,EQ1),dim=-2)
                 
-                A1=torch.bmm(ED1,EQ1)
+                A1=torch.bmm(ED1,EQ1.transpose(1,2))
                 
-                SD1=torch.bmm(F.softmax(A1.transpose(1,2),dim=-1),EQ1)
-                SQ1=torch.bmm(F.softmax(A1,dim=-1),ED1)
+                SD1=torch.bmm(F.softmax(A1,dim=-2),EQ1)
+                SQ1=torch.bmm(F.softmax(A1.transpose(1,2),dim=-2),ED1)
                 
                 SD1=SD1[:,1:,:]
                 SQ1=SQ1[:,1:,:]
                 A1=A1[:,1:,1:]
                 
-                CD1=torch.bmm(F.softmax(A1.transpose(1,2),dim=-1),SQ1)
+                CD1=torch.bmm(F.softmax(A1,dim=-2),SQ1)
                 
                 ED2,(final_hidden_state2,final_cell_state2)=self.lstm2(SD1,None)
                 EQ2,(qfinal_hidden_state2,qfinal_cell_state2)=self.lstm2(SQ1,None)
                 
                 ED2=torch.cat((self.sentinal,ED2),dim=-2)
-                EQ2=torch.cat((self.sentinal,EQ2),dim=-2)
+                EQ2=torch.cat((self.sentinalq,EQ2),dim=-2)
                 
-                A2=torch.bmm(ED2,EQ2)
+                A2=torch.bmm(ED2,EQ2.transpose(1,2))
                 
-                SD2=torch.bmm(F.softmax(A2.transpose(1,2),dim=-1),EQ2)
-                SQ2=torch.bmm(F.softmax(A2,dim=-1),ED2)
+                SD2=torch.bmm(F.softmax(A2,dim=-2),EQ2)
+                SQ2=torch.bmm(F.softmax(A2.transpose(1,2),dim=-2),ED2)
                 
                 SD2=SD2[:,1:,:]
                 SQ2=SQ2[:,1:,:]
                 A2=A2[:,1:,1:]
                 
-                CD2=torch.bmm(F.softmax(A2.transpose(1,2),dim=-1),SQ2)
+                CD2=torch.bmm(F.softmax(A2,dim=-2),SQ2)
                 
+                ED1=ED1[:,1:,:]
+                ED2=ED2[:,1:,:]
                 input_to_U=torch.cat((ED1,ED2,SD1,SD2,CD1,CD2),dim=-1)
                 U,(ufinal_hidden_state,ufinal_cell_state)=self.ulstm(input_to_U,None)
                 
@@ -63,7 +67,7 @@ class Decoder(nn.Module):
                 super(Decoder,self).__init__()
                 self.max_decoding_steps=max_decoding_steps
                 
-                self.lstm=nn.LSTM(4*dim,dim)
+                self.lstm=nn.LSTM(4*dim,dim,batch_first=True)
                 
                 self.hmn=HMN(pooling_size,dim)
                 self.experts=Experts(pooling_size,dim,k)
@@ -74,16 +78,21 @@ class Decoder(nn.Module):
         def forward(self,U):
                 start_index=0
                 end_index=U.shape[1]-1
-                hidden=None
+                hidden_state=None
+                cell_state=None
                 
                 start_logits=[]
                 end_logits=[]
                 
-                for _ in range(self.max_decoding_steps):
+                for i in range(self.max_decoding_steps):
                         U_start=U[:,start_index,:].view(1,1,-1)
                         U_end=U[:,end_index,:].view(1,1,-1)
                         U_input=torch.cat((U_start,U_end),dim=-1)
-                        hidden,(hidden_state,cell_state)=self.lstm(U_input,hidden)
+
+                        if i==0:
+                            hidden,(hidden_state,cell_state)=self.lstm(U_input,None)
+                        else:
+                            hidden,(hidden_state,cell_state)=self.lstm(U_input,(hidden_state,cell_state))
                         
                         m1_equivalent=self.experts(hidden,U_start,U_end,U)
                         logits_start=self.hmn(m1_equivalent)
@@ -97,7 +106,7 @@ class Decoder(nn.Module):
                         start_logits.append(logits_start)
                         end_logits.append(logits_end)
                         
-                return torch.cat(start_logits,dim=-1),torch.cat(end_logits,dim=-1)
+                return torch.cat(start_logits,dim=-2),torch.cat(end_logits,dim=-2)
             
             
 class Model(nn.Module):
