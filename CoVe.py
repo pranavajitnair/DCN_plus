@@ -1,9 +1,5 @@
 import os
-
-import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_packed_sequence as unpack
-from torch.nn.utils.rnn import pack_padded_sequence as pack
 import torch.utils.model_zoo as model_zoo
 
 
@@ -11,7 +7,7 @@ model_urls = {
     'wmt-lstm' : 'https://s3.amazonaws.com/research.metamind.io/cove/wmtlstm-b142a7f2.pth'
 }
 
-model_cache = os.path.join(os.path.dirname(os.path.realpath(__file__)), '.torch')
+model_cache =os.path.join(os.path.dirname(os.path.realpath(__file__)), '.torch')
 
 
 class MTLSTM(nn.Module):
@@ -35,7 +31,7 @@ class MTLSTM(nn.Module):
         self.rnn.load_state_dict(model_zoo.load_url(model_urls['wmt-lstm'], model_dir=model_cache))
         self.residual_embeddings = residual_embeddings
 
-    def forward(self, inputs, lengths, hidden=None):
+    def forward(self, inputs, lengths=None, hidden=None):
         """A pretrained MT-LSTM (McCann et. al. 2017). 
         This LSTM was trained with 300d 840B GloVe on the WMT 2017 machine translation dataset.
      
@@ -45,13 +41,6 @@ class MTLSTM(nn.Module):
             lengths (Long Tensor): (batch_size, lengths) lenghts of each sequence for handling padding
             hidden (Float Tensor): initial hidden state of the LSTM
         """
-        if self.embed:
-            inputs = self.vectors(inputs)
-        lens, indices = torch.sort(lengths, 0, True)
-        outputs, hidden_t = self.rnn(pack(inputs[indices], lens.tolist(), batch_first=True), hidden)
-        outputs = unpack(outputs, batch_first=True)[0]
-        _, _indices = torch.sort(indices, 0)
-        outputs = outputs[_indices]
-        if self.residual_embeddings:
-            outputs = torch.cat([inputs, outputs], 2)
+        outputs, hidden_t = self.rnn(inputs, hidden)
+        
         return outputs
