@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class HMN(nn.Module):
         def __init__(self,pooling_size,dim):
-                super(HMN,self)._init__()
+                super(HMN,self).__init__()
                 
                 self.dim=dim
                 self.pooling_size=pooling_size
@@ -14,8 +14,8 @@ class HMN(nn.Module):
                 self.maxout3=nn.Linear(2*dim,pooling_size)
                 
         def forward(self,m1):
-                m2=self.maxout2(m1).view(1,-1,self.dim,self.pooling_size).max(3)
-                m3=self.maxout3(torch.cat((m1,m2),dim=-1)).view(1,-1,1,self.pooling_size).max(3)
+                m2,_=self.maxout2(m1).view(1,-1,self.dim,self.pooling_size).max(3)
+                m3,_=self.maxout3(torch.cat((m1,m2),dim=-1)).view(1,-1,1,self.pooling_size).max(3)
                 
                 return m3.contiguous().view(1,1,-1)
             
@@ -41,36 +41,24 @@ class Experts(nn.Module):
                 h1=self.non_noise(input_to_experts).view(1,-1,self.dim,self.num_experts)
                 h2=self.noise(input_to_experts).view(1,-1,self.dim,self.num_experts)*torch.randn(h1.shape,requires_grad=False)
                 h=h1+h2
-                
+          
                 g=self.sparsify(h)
                 e=self.E(input_to_experts).view(1,u.shape[1],self.dim,self.num_experts)
-                output=g*e.mean(-1)
-                
+               
+                output=g*e
+                output=output.mean(-1)
                 return output
                 
         def sparsify(self,matrix):
                 values,indices=self.get_top_k(matrix)
-                
-                one_hot=torch.zeros((2,self.num_experts))
-                one_hot[indices[0]]=1
-                one_hot[indices[1]]=1
+                one_hot=F.one_hot(indices,self.num_experts)
+                one_hot=one_hot.sum(-2)
                 output=matrix*one_hot
-                output=F.softmax(output+-1e30*(output==0).type(torch.float),dim=-1)
+                output=F.softmax(output+-1e5*(output==0).type(torch.float),dim=-1)
                 
                 return output
                 
         def get_top_k(self,matrix):
-                values=[]
-                indices=[]
-                
-                for i in range(self.k):
-                        value,index=torch.max(matrix,dim=-1)
-                        values.append(value)
-                        indices.append(index)
-                        
-                        if i+1!=self.k:
-                                one_hot=torch.zeros(self.num_experts)
-                                one_hot[index]=float('-inf')
-                                matrix+=one_hot
+                values,indices=torch.topk(matrix,k=2,dim=-1)
                                 
                 return values,indices
