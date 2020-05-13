@@ -99,6 +99,9 @@ def tokenize(data):
                                 
                 if len(question_set)==0:
                         output['contexts'].pop()
+                else:
+                        output['questions'].append(question_set)
+                        output['answers'].append(answer_set)
                         
         return output
 
@@ -147,8 +150,8 @@ def get_answer(document,ans_start,ans_end,predict_start,predict_end):
 def setup():
         parser=argparse.ArgumentParser('files parser')
         
-        parser.add_argument('--train_file',type=str,default='/home/pranav/ml/data/SQuAD 1.1/train-v1.1.json',help=' path to train file')
-        parser.add_argument('--dev_file',type=str,'/home/pranav/ml/data/SQuAD 1.1/dev-v1.1.json',help='path to dev file')
+        parser.add_argument('--train_file',type=str,default=os.getcwd()+'/data/SQuAD 1.1/train-v1.1.json',help=' path to train file')
+        parser.add_argument('--dev_file',type=str,default=os.getcwd()+'/data/SQuAD 1.1/dev-v1.1.json',help='path to dev file')
         parser.add_argument('--preprocessed_train',type=str,default=os.getcwd()+'/Preprocessed/train.pickle',help='path to file where preprocessed training data to be stored')
         parser.add_argument('--preprocessed_dev',type=str,default=os.getcwd()+'/Preprocessed/dev.pickle',help='path to file where preprocessed development data to be stored')
         
@@ -156,7 +159,7 @@ def setup():
         
         return args
     
-def main():
+def main(args):
         train_path=args.train_file
         dev_path=args.dev_file
         train_store=args.preprocessed_train
@@ -174,7 +177,7 @@ def main():
         pickle.dump(tokenized_data_train,file_train)
         
         file_dev=open(dev_store,'wb')
-        pickle.dump(file_dev,tokenized_data_dev,file_dev)
+        pickle.dump(tokenized_data_dev,file_dev)
         
 if __name__=='__main__':
         args=setup()
